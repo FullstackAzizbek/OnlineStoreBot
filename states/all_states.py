@@ -15,6 +15,8 @@ class ProductsState(StatesGroup):
     finish_edit_product_state = State()
     delete_product_state = State()
     finish_delete_product_state = State()
+    get_product_state = State()
+    search_state = State()
 
 class AddProduct(StatesGroup):
     title_state = State()

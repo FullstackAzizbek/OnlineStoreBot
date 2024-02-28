@@ -11,7 +11,6 @@ admin_commands = [
     BotCommand(command="add_product", description="Add new category"),
     BotCommand(command="categories", description="All categories"),
     BotCommand(command="products", description="All products"),
-    BotCommand(command="get_my_products", description="This command for get only your products.")
 ]
 
 user_commands = [
@@ -19,7 +18,6 @@ user_commands = [
     BotCommand(command="help", description="Manual for this bot"),
     BotCommand(command="categories", description="All categories"),
     BotCommand(command="products", description="All products"),
-    BotCommand(command="get_my_products", description="This command for get only your products.")
 ]
 
 

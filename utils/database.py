@@ -79,10 +79,19 @@ class Database:
 
         return products
     
-    def get_edit_product(self, product_name, product_desc, product_price, product_category, product_image, phone, pro_id):
+    def get_edit_product(self, product_name, product_desc, product_price, product_category, product_image, phone, pro_id, user_id):
         self.cursor.execute(
-            "UPDATE products SET product_name = %s, product_desc = %s, product_price = %s, product_category = %s, product_image = %s, phone = %s WHERE id = %s;",
-            (product_name, product_desc, product_price, product_category, product_image, phone, pro_id,)
+            "UPDATE products SET product_name = %s, product_desc = %s, product_price = %s, product_category = %s, product_image = %s, phone = %s WHERE products.id = %s and id = %s;",
+            (product_name, product_desc, product_price, product_category, product_image, phone, pro_id, user_id,)
         )
-        self.conn.commit()
+        return self.conn.commit()
  
+
+    def search_product(self, product_name):
+        search_term = '%' + product_name + '%'
+        self.cursor.execute(
+            "SELECT product_name, product_desc, product_price, product_category, product_image, phone, id FROM products WHERE product_name LIKE ?;", (search_term, )
+        )
+        result = self.cursor.fetchall()
+
+        return result

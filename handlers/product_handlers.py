@@ -1,10 +1,12 @@
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InputMediaPhoto
 from aiogram.filters import Command
 from utils.database import Database
-from states.all_states import AddProduct, ProductsState, ProductEditState
-from keyboards.cat_keyboard import make_confirm, make_select
+from states.all_states import AddProduct, ProductsState
+from unidecode import unidecode
+
+from keyboards.cat_keyboard import make_confirm, make_pagination, make_category_2
 product_router = Router()
 edit_product_router = Router()
 db = Database()
@@ -12,66 +14,53 @@ db = Database()
 @product_router.message(Command('add_product'))
 async def product_add_handler(message: Message, state: FSMContext):
     await message.answer(
-        text="Okey, send me your product name please..."
+        text="Okey, choose the category...",
+        reply_markup=make_category_2()
     )
-    await state.set_state(AddProduct.title_state)
+    await state.set_state(AddProduct.category_state)
 
-
-@product_router.message(AddProduct.title_state, F.text)
-async def product_text_handler(message: Message, state: FSMContext):
-    if message.text != "":
-        await state.update_data(title = message.text)
-        await state.set_state(AddProduct.text_state)
-        await message.answer(
-            "Ok, send me your product description..."
-        )
-    else:
-        await message.answer(
-            "Please enter your product name..."
-        )
+@product_router.callback_query(AddProduct.category_state)
+async def product_category_handler(query: CallbackQuery, state: FSMContext):
+    category = query.data
+    if category:
+        await query.message.delete()
+        await state.update_data(category=category)
         await state.set_state(AddProduct.title_state)
+        await query.message.answer(text="Ok, send me your product name please...")
+    else:
+        await query.message.answer("Please enter your product category...")
+        await state.set_state(AddProduct.category_state)
+
+@product_router.message(AddProduct.title_state)
+async def product_title_handler(message: Message, state: FSMContext):
+    await state.update_data(title = message.text)
+    await state.set_state(AddProduct.text_state)
+    await message.answer(
+        text="Ok, send me your product description..."
+    )
+
 
 @product_router.message(AddProduct.text_state)
-async def product_price_handler(message: Message, state: FSMContext):
-    if message.text != "":
-        await state.update_data(text = message.text)
-        await state.set_state(AddProduct.price_state)
-        await message.answer(
-            "Ok, send me your product price..."
-        )
-    else:
-        await message.answer(
-            "Please enter your product description..."
-        )
-        await state.set_state(AddProduct.text_state)
+async def product_desc_handler(message: Message, state: FSMContext):
+    await state.update_data(text = message.text)
+    await state.set_state(AddProduct.price_state)
+    await message.answer(
+        text="Ok, send me your product price..."
+    )
 
 @product_router.message(AddProduct.price_state, F.text)
-async def product_category_handler(message: Message, state: FSMContext):
+async def product_price_handler(message: Message, state: FSMContext):
     if message.text != "":
         await state.update_data(price = message.text)
-        await state.set_state(AddProduct.category_state)
+        await state.set_state(AddProduct.phone_state)
         await message.answer(
-            "Ok, send me your product category..."
+            "Ok, send me your phone number or contact please..."
         )
     else:
         await message.answer(
             "Please enter your product price..."
         )
         await state.set_state(AddProduct.price_state)
-
-@product_router.message(AddProduct.category_state, F.text)
-async def product_phone_handler(message: Message, state: FSMContext):
-    if message.text != "":
-        await state.update_data(category = message.text)
-        await state.set_state(AddProduct.phone_state)
-        await message.answer(
-            "Ok, send me your phone number or contact..."
-        )
-    else:
-        await message.answer(
-            "Please enter your product category..."
-        )
-        await state.set_state(AddProduct.category_state)
 
 @product_router.message(AddProduct.phone_state)
 async def product_image_handler(message: Message, state: FSMContext):
@@ -127,97 +116,111 @@ async def finish_add_product(callback: CallbackQuery, state: FSMContext):
         )
 
 @product_router.message(Command("products"))
-async def get_product_handler(message: Message):
-    product = db.get_products(message.from_user.id)
+async def get_product_handler(message: Message, state: FSMContext):
+    products = db.get_products(message.from_user.id)
+    
     await message.answer(
         text="These are your products..."
     )
-    for pro in product:
+    if len(products) == 1:
+        product = products[0]
         await message.answer_photo(
-            photo=pro[4],
-            caption=f"Name: <b>{pro[0]}</b>\nDescription: {pro[1]}\nPrice: <i>{pro[2]}$</i>\nCategory: <b>{pro[3]}</b>\nPhone: <a>{pro[5]}</a>"
-        )
-
-    
-@edit_product_router.message(Command("edit_product"))
-async def edit_product_handler(message: Message):
-    await message.answer(
-        text="Please select product which you want and click 'Edit this' button for edit..."
-    )
-
-    product = db.get_products(message.from_user.id)
-
-    for pro in product:
-        await message.answer_photo(
-            photo=pro[4],
-            caption=f"Name: <b>{pro[0]}</b>\nDescription: {pro[1]}\nPrice: <i>{pro[2]}$</i>\nCategory: <b>{pro[3]}</b>\nPhone: <a>{pro[5]}</a>",
-            reply_markup=make_select(pro[6])
-        )
-        
-    
-@edit_product_router.callback_query(CallbackQuery)
-async def edit_select_handler(callback: CallbackQuery, state: FSMContext):
-    await state.set_state(ProductEditState.title_edit_state)
-    await callback.message.answer(
-        text="Please enter new name..."
-    )
-
-@edit_product_router.message(ProductEditState.title_edit_state)
-async def edit_title_handler(message: Message, state: FSMContext):
-    await state.update_data(edit_title = message.text)
-    await state.set_state(ProductEditState.text_edit_state)
-    await message.answer(
-        text="Please enter new description..."
-    )
-
-@edit_product_router.message(ProductEditState.text_edit_state)
-async def edit_text_handler(message: Message, state: FSMContext):
-    await state.update_data(edit_text = message.text)
-    await state.set_state(ProductEditState.price_edit_state)
-    await message.answer(
-        text="Please enter new price..."
-    )
-
-@edit_product_router.message(ProductEditState.price_edit_state)
-async def edit_price_handler(message: Message, state: FSMContext):
-    await state.update_data(edit_price = message.text)
-    await state.set_state(ProductEditState.category_edit_state)
-    await message.answer(
-        text="Please enter new category name..."
-    )
-
-@edit_product_router.message(ProductEditState.category_edit_state)
-async def edit_category_handler(message: Message, state: FSMContext):
-    await state.update_data(edit_category = message.text)
-    await state.set_state(ProductEditState.image_edit_state)
-    await message.answer(
-        text="Please enter new image..."
-    )
-
-@edit_product_router.message(ProductEditState.image_edit_state)
-async def edit_image_handler(message: Message, state: FSMContext):
-    if message.photo:
-        await state.update_data(edit_image = message.photo[-1].file_id)
-        await state.set_state(ProductEditState.phone_edit_state)
-        await message.answer(
-            text="Please enter new phone number..."
-        )
+            photo=product[4],
+            caption=f"Name: <b>{product[0]}</b>\nDescription: {product[1]}\nPrice: <i>{product[2]}$</i>\nCategory: <b>{product[3]}</b>\nPhone: <a>{product[5]}</a>",
+            reply_markup=make_pagination()
+        ) 
     else:
-        await message.answer(
-            text="Please send only image..."
+        product = products[0]
+        await state.update_data(index = 0)
+        await state.update_data(products=products)
+        await state.update_data()
+        await message.answer_photo(
+            photo=product[4],
+            caption=f"Name: <b>{product[0]}</b>\nDescription: {product[1]}\nPrice: <i>{product[2]}$</i>\nCategory: <b>{product[3]}</b>\nPhone: <a>{product[5]}</a>",
+            reply_markup=make_pagination()
         )
-        await state.set_state(ProductEditState.image_edit_state)
+        await state.set_state(ProductsState.get_product_state)
 
-@edit_product_router.message(ProductEditState.phone_edit_state)
-async def phone_edit_handler(message: Message, state: FSMContext):
-    await state.update_data(edit_phone = message.text)
+@product_router.callback_query(ProductsState.get_product_state)
+async def get_product_page(query: CallbackQuery, state: FSMContext):
     all_data = await state.get_data()
-    await db.get_edit_product(
-        product_name=all_data.get('edit_title'),
-        product_desc=all_data.get('edit_text'),
-        product_price=all_data.get('edit_price'),
-        product_category=all_data.get('edit_category'),
-        product_image=all_data.get('edit_image'),
-        phone=all_data.get('edit_phone'),
-        id=message.from_user.id
+
+    index = all_data.get('index')
+    products = all_data.get('products')
+    count = len(products)
+
+    if query.data == "next":
+        if index == count - 1:
+            index = 0
+        else:
+            index += 1
+    else:
+        if index == 0:
+            index = count - 1
+        else:
+            index -= 1
+
+    await state.update_data(index=index)
+    await query.message.edit_media(
+        media=InputMediaPhoto(
+            media=products[index][4],
+            caption=f"Name: <b>{products[index][0]}</b>\nDescription: {products[index][1]}\nPrice: <i>{products[index][2]}$</i>\nCategory: <b>{products[index][3]}</b>\nPhone: <a>{products[index][5]}</a>",
+        ),
+        reply_markup=make_pagination()
+    )
+    state.clear()
+
+@product_router.message(F.text)
+async def search_handler(message: Message, state: FSMContext):
+    text = message.text
+    products = db.search_product(unidecode(text))
+    await state.update_data(products=products)
+    all_data = await state.get_data()
+    count = len(all_data.get('products'))
+    await state.update_data(index = 0)
+    
+
+    if count > 0 and count is not None:
+        if count == 1:
+            await message.answer_photo(
+                photo=products[0][4],
+                caption=f"Name: <b>{products[0][0]}</b>\nDescription: {products[0][1]}\nPrice: <i>{products[0][2]}$</i>\nCategory: <b>{products[0][3]}</b>\nPhone: <a>{products[0][5]}</a>",
+            )
+        elif count > 1:
+            await state.set_state(ProductsState.search_state)
+            await message.answer_photo(
+                photo=products[0][4],
+                caption=f"Name: <b>{products[0][0]}</b>\nDescription: {products[0][1]}\nPrice: <i>{products[0][2]}$</i>\nCategory: <b>{products[0][3]}</b>\nPhone: <a>{products[0][5]}</a>",
+                reply_markup=make_pagination()
+            )
+    else:
+        await message.answer("No products found.")
+
+@product_router.callback_query(ProductsState.search_state)
+async def search_products_handler(query: CallbackQuery, state: FSMContext):
+    
+    all_data = await state.get_data()
+
+    index = all_data.get('index')
+    products = all_data.get('products')
+    count = len(products)
+
+    if query.data == "next":
+        if index == count - 1:
+            index = 0
+        else:
+            index += 1
+    elif query.data == "prev":  
+        if index == 0:
+            index = count - 1
+        else:
+            index -= 1
+
+    await state.update_data(index=index)
+    await query.message.edit_media(
+        media=InputMediaPhoto(
+            media=products[index][4],
+            caption=f"Name: <b>{products[index][0]}</b>\nDescription: {products[index][1]}\nPrice: <i>{products[index][2]}$</i>\nCategory: <b>{products[index][3]}</b>\nPhone: <a>{products[index][5]}</a>",
+        ),
+        reply_markup=make_pagination()
     )
